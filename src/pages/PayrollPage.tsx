@@ -43,7 +43,7 @@ const initialState: PayrollState = {
 
 function reducer(state: PayrollState, action: PayrollAction): PayrollState {
   switch (action.type) {
-    case 'dataLoaded':
+    case 'dataLoaded': {
       const pageRecordIds = action.records.map((r) => Number(r.id));
       const selectedIds = state.selectedIds.filter((id) => pageRecordIds.includes(id));
       return {
@@ -54,6 +54,7 @@ function reducer(state: PayrollState, action: PayrollAction): PayrollState {
         totalItems: action.totalItems,
         error: '',
       };
+    }
     case 'loadFailed':
       return { ...state, error: action.error };
     case 'setPage':

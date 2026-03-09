@@ -1,8 +1,9 @@
 import { BarChart3, Eye, EyeOff, Lock, Shield } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
+import type { Tenant } from '../api/client';
 import { session } from '../app/session';
 
 type Props = {
@@ -14,15 +15,47 @@ export function LoginPage({ onLogin }: Props) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [tenantSlug, setTenantSlug] = useState(() => session.getTenantSlug());
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    api.tenants
+      .listPublic()
+      .then((items) => {
+        if (cancelled) return;
+        setTenants(items);
+        setTenantSlug((current) => {
+          const hasCurrent = items.some((tenant) => tenant.slug === current);
+          if (hasCurrent) return current;
+          return items.length > 0 ? items[0].slug : current;
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setTenants([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError('');
 
+    if (!tenantSlug) {
+      setError('Selecciona un tenant');
+      return;
+    }
+
     try {
-      const result = await api.login(username, password);
+      const result = await api.login(username, password, tenantSlug);
       session.setToken(result.access_token);
+      session.setTenantSlug(tenantSlug);
       onLogin();
       navigate('/');
     } catch (err) {
@@ -98,6 +131,27 @@ export function LoginPage({ onLogin }: Props) {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="tenant" className="text-sm font-medium">Tenant</label>
+              <select
+                id="tenant"
+                className="input"
+                value={tenantSlug}
+                onChange={(e) => setTenantSlug(e.target.value)}
+                required
+              >
+                {tenants.length === 0 ? (
+                  <option value={tenantSlug}>Sin tenants cargados</option>
+                ) : (
+                  tenants.map((tenant) => (
+                    <option key={tenant.id} value={tenant.slug}>
+                      {tenant.name}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
             <div className="space-y-1.5">
               <label htmlFor="username" className="text-sm font-medium">Usuario o correo</label>
               <input

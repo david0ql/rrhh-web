@@ -1,5 +1,7 @@
 import { BarChart3, ChevronRight, Command, LogOut, Settings } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { session } from '../app/session';
 
 type Props = {
   onLogout: () => void;
@@ -42,6 +44,25 @@ const menu: MenuNode[] = [
 export function AppLayout({ onLogout }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
+  const [tenantSlug, setTenantSlug] = useState(() => session.getTenantSlug());
+  const tenantName =
+    tenantSlug.length > 0 ? `${tenantSlug.charAt(0).toUpperCase()}${tenantSlug.slice(1)}` : 'Tenant';
+
+  useEffect(() => {
+    const listener = (event: Event) => {
+      const customEvent = event as CustomEvent<string>;
+      if (typeof customEvent.detail === 'string' && customEvent.detail.trim()) {
+        setTenantSlug(customEvent.detail.trim().toLowerCase());
+        return;
+      }
+      setTenantSlug(session.getTenantSlug());
+    };
+
+    window.addEventListener('tenant-changed', listener);
+    return () => {
+      window.removeEventListener('tenant-changed', listener);
+    };
+  }, []);
 
   function logout() {
     onLogout();
@@ -92,7 +113,10 @@ export function AppLayout({ onLogout }: Props) {
             <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
               <BarChart3 size={14} className="text-primary-foreground" />
             </div>
-            <span className="font-semibold text-sm tracking-tight">Amaya RH</span>
+            <div className="leading-tight">
+              <span className="font-semibold text-sm tracking-tight block">{tenantName} RH</span>
+              <span className="text-[10px] uppercase text-muted-foreground tracking-wide">Tenant activo</span>
+            </div>
           </div>
         </div>
 

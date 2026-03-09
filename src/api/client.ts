@@ -1,3 +1,5 @@
+import { session } from '../app/session';
+
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
 
 type SessionUser = {
@@ -131,6 +133,13 @@ export type LoanPayment = {
   notes?: string;
 };
 
+export type Tenant = {
+  id: number;
+  name: string;
+  slug: string;
+  isActive: boolean;
+};
+
 function withQuery(path: string, query?: Record<string, string | number | boolean | undefined>): string {
   if (!query) return path;
 
@@ -148,12 +157,15 @@ async function requestBlob(
   path: string,
   token: string,
   init?: Omit<RequestInit, 'headers'>,
+  tenantSlug?: string,
 ): Promise<Blob> {
+  const activeTenant = (tenantSlug ?? session.getTenantSlug()).trim().toLowerCase();
   const response = await fetch(`${API_URL}${path}`, {
     method: init?.method ?? 'GET',
     body: init?.body,
     headers: {
       Authorization: `Bearer ${token}`,
+      ...(activeTenant ? { 'x-tenant': activeTenant } : {}),
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
     },
   });
@@ -161,12 +173,19 @@ async function requestBlob(
   return response.blob();
 }
 
-async function request<T>(path: string, init?: RequestInit, token?: string): Promise<T> {
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  token?: string,
+  tenantSlug?: string,
+): Promise<T> {
+  const activeTenant = (tenantSlug ?? session.getTenantSlug()).trim().toLowerCase();
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(activeTenant ? { 'x-tenant': activeTenant } : {}),
       ...(init?.headers ?? {}),
     },
   });
@@ -206,11 +225,11 @@ export const api = {
   dashboardSummary: (token: string) =>
     request<DashboardSummary>('/dashboard/summary', { method: 'GET' }, token),
 
-  login: (username: string, password: string) =>
+  login: (username: string, password: string, tenantSlug?: string) =>
     request<LoginResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
-    }),
+    }, undefined, tenantSlug),
 
   me: (token: string) => request<SessionUser>('/auth/me', { method: 'GET' }, token),
   changePassword: (
@@ -325,6 +344,20 @@ export const api = {
     ) =>
       request<{ loan: Loan; payment: LoanPayment }>(
         '/loans/payments',
+        {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        },
+        token,
+      ),
+  },
+
+  tenants: {
+    listPublic: () => request<Tenant[]>('/tenants/public', { method: 'GET' }),
+    list: (token: string) => request<Tenant[]>('/tenants', { method: 'GET' }, token),
+    create: (token: string, payload: { name: string; slug?: string }) =>
+      request<Tenant>(
+        '/tenants',
         {
           method: 'POST',
           body: JSON.stringify(payload),
