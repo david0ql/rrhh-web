@@ -136,6 +136,8 @@ export type LoanPayment = {
 export type Tenant = {
   id: number;
   name: string;
+  legalName: string;
+  taxId: string;
   slug: string;
   isActive: boolean;
 };
@@ -355,7 +357,10 @@ export const api = {
   tenants: {
     listPublic: () => request<Tenant[]>('/tenants/public', { method: 'GET' }),
     list: (token: string) => request<Tenant[]>('/tenants', { method: 'GET' }, token),
-    create: (token: string, payload: { name: string; slug?: string }) =>
+    create: (
+      token: string,
+      payload: { name: string; legalName: string; taxId: string; slug?: string },
+    ) =>
       request<Tenant>(
         '/tenants',
         {

@@ -59,6 +59,8 @@ export function SettingsPage({ token }: Props) {
   const [tenantMessage, setTenantMessage] = useState('');
   const [activeTenant, setActiveTenant] = useState(() => session.getTenantSlug());
   const [newTenantName, setNewTenantName] = useState('');
+  const [newTenantLegalName, setNewTenantLegalName] = useState('');
+  const [newTenantTaxId, setNewTenantTaxId] = useState('');
   const [newTenantSlug, setNewTenantSlug] = useState('');
   const [creatingTenant, setCreatingTenant] = useState(false);
 
@@ -121,11 +123,15 @@ export function SettingsPage({ token }: Props) {
     try {
       const created = await api.tenants.create(token, {
         name: newTenantName.trim(),
+        legalName: newTenantLegalName.trim(),
+        taxId: newTenantTaxId.trim(),
         ...(newTenantSlug.trim()
           ? { slug: newTenantSlug.trim().toLowerCase() }
           : {}),
       });
       setNewTenantName('');
+      setNewTenantLegalName('');
+      setNewTenantTaxId('');
       setNewTenantSlug('');
       setActiveTenant(created.slug);
       session.setTenantSlug(created.slug);
@@ -219,6 +225,28 @@ export function SettingsPage({ token }: Props) {
               />
             </div>
             <div className="field">
+              <label htmlFor="tenant-legal-name" className="field-label">Razón social</label>
+              <input
+                id="tenant-legal-name"
+                className="input"
+                value={newTenantLegalName}
+                onChange={(e) => setNewTenantLegalName(e.target.value)}
+                placeholder="Ej: EMPRESA CLIENTE SAS"
+                required
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="tenant-tax-id" className="field-label">NIT</label>
+              <input
+                id="tenant-tax-id"
+                className="input"
+                value={newTenantTaxId}
+                onChange={(e) => setNewTenantTaxId(e.target.value)}
+                placeholder="Ej: 900123456-7"
+                required
+              />
+            </div>
+            <div className="field">
               <label htmlFor="tenant-slug" className="field-label">Slug (opcional)</label>
               <input
                 id="tenant-slug"
@@ -247,7 +275,10 @@ export function SettingsPage({ token }: Props) {
               ) : (
                 tenants.map((tenant) => (
                   <li key={tenant.id} className="flex items-center justify-between py-1">
-                    <span>{tenant.name}</span>
+                    <div>
+                      <p>{tenant.name}</p>
+                      <p className="text-xs text-muted-foreground">{tenant.legalName} · NIT {tenant.taxId}</p>
+                    </div>
                     <span className="text-xs uppercase text-muted-foreground">{tenant.slug}</span>
                   </li>
                 ))
