@@ -1,7 +1,7 @@
 import { Calculator } from 'lucide-react';
 import { useEffect, useReducer } from 'react';
 import type { FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, fmt } from '../api/client';
 import type { Employee, Loan, PayrollConfig } from '../api/client';
 
@@ -33,6 +33,7 @@ type State = {
   form: PayrollForm;
   loadingEmployees: boolean;
   loadingLoan: boolean;
+  loadingPayroll: boolean;
 };
 
 type Action =
@@ -43,6 +44,8 @@ type Action =
   | { type: 'employeeSelected'; employeeId: number }
   | { type: 'loanLoaded'; loan: Loan | null; loanId: number | undefined }
   | { type: 'loanLoadFailed' }
+  | { type: 'payrollLoaded'; form: PayrollForm }
+  | { type: 'payrollLoadFailed'; error: string }
   | { type: 'formFieldChanged'; field: keyof PayrollForm; value: PayrollForm[keyof PayrollForm] }
   | { type: 'submitStarted' }
   | { type: 'submitFailed'; error: string }
@@ -85,6 +88,7 @@ const initialState: State = {
   form: initialForm,
   loadingEmployees: false,
   loadingLoan: false,
+  loadingPayroll: false,
 };
 
 function reducer(state: State, action: Action): State {
@@ -134,6 +138,10 @@ function reducer(state: State, action: Action): State {
       };
     case 'loanLoadFailed':
       return { ...state, activeLoan: null, loadingLoan: false };
+    case 'payrollLoaded':
+      return { ...state, form: action.form, loadingPayroll: false };
+    case 'payrollLoadFailed':
+      return { ...state, error: action.error, loadingPayroll: false };
     case 'formFieldChanged':
       if (action.field === 'earnedSalary' || action.field === 'earnedExtras') {
         return {
@@ -155,6 +163,8 @@ function reducer(state: State, action: Action): State {
 
 export function PayrollCreatePage({ token }: Props) {
   const navigate = useNavigate();
+  const { id: editId } = useParams<{ id?: string }>();
+  const isEditing = Boolean(editId);
   const [state, dispatch] = useReducer(reducer, initialState);
 
   useEffect(() => {
@@ -164,6 +174,33 @@ export function PayrollCreatePage({ token }: Props) {
       .then((res) => dispatch({ type: 'employeesLoaded', employees: res.data }))
       .catch((err) => dispatch({ type: 'employeesLoadFailed', error: err instanceof Error ? err.message : 'Error cargando empleados' }));
   }, [token]);
+
+  // In edit mode, load existing payroll record and override form
+  useEffect(() => {
+    if (!editId) return;
+    api.payroll
+      .get(token, Number(editId))
+      .then((record) => {
+        dispatch({
+          type: 'payrollLoaded',
+          form: {
+            employeeId: record.employeeId,
+            loanId: undefined,
+            paymentDate: record.paymentDate ?? '',
+            year: record.year,
+            month: record.month,
+            daysWorked: Number(record.daysWorked),
+            earnedSalary: Number(record.earnedSalary),
+            earnedExtras: Number(record.earnedExtras),
+            deductionHealth: Number(record.deductionHealth),
+            deductionPension: Number(record.deductionPension),
+            deductionLoan: Number(record.deductionLoan),
+            deductionOther: Number(record.deductionOther),
+          },
+        });
+      })
+      .catch((err) => dispatch({ type: 'payrollLoadFailed', error: err instanceof Error ? err.message : 'Error cargando nómina' }));
+  }, [token, editId]);
 
   useEffect(() => {
     api.payroll
@@ -200,14 +237,21 @@ export function PayrollCreatePage({ token }: Props) {
     dispatch({ type: 'submitStarted' });
     try {
       const { loanId, paymentDate, ...rest } = state.form;
-      await api.payroll.create(token, {
-        ...rest,
-        ...(paymentDate ? { paymentDate } : {}),
-        ...(loanId ? { loanId } : {}),
-      });
+      if (isEditing && editId) {
+        await api.payroll.update(token, Number(editId), {
+          ...rest,
+          ...(paymentDate ? { paymentDate } : {}),
+        });
+      } else {
+        await api.payroll.create(token, {
+          ...rest,
+          ...(paymentDate ? { paymentDate } : {}),
+          ...(loanId ? { loanId } : {}),
+        });
+      }
       navigate('/payroll');
     } catch (err) {
-      dispatch({ type: 'submitFailed', error: err instanceof Error ? err.message : 'Error creando nómina' });
+      dispatch({ type: 'submitFailed', error: err instanceof Error ? err.message : 'Error guardando nómina' });
     }
   }
 
@@ -228,8 +272,8 @@ export function PayrollCreatePage({ token }: Props) {
     <div className="flex-1 overflow-y-auto p-6 space-y-5">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold">Crear nómina</h1>
-          <p className="text-sm text-muted-foreground">Liquidación mensual para un empleado activo.</p>
+          <h1 className="text-lg font-semibold">{isEditing ? 'Editar nómina' : 'Crear nómina'}</h1>
+          <p className="text-sm text-muted-foreground">{isEditing ? 'Corrige los valores y vuelve a impulsar.' : 'Liquidación mensual para un empleado activo.'}</p>
         </div>
         <Link to="/payroll" className="btn-ghost">← Ver nóminas</Link>
       </header>
@@ -242,14 +286,16 @@ export function PayrollCreatePage({ token }: Props) {
               <label htmlFor="employee-select" className="field-label">Empleado</label>
               <select
                 id="employee-select"
-                className="input"
+                className={`input${isEditing ? ' bg-muted/40' : ''}`}
                 value={state.form.employeeId}
+                disabled={isEditing}
                 onChange={(e) => dispatch({ type: 'employeeSelected', employeeId: Number(e.target.value) })}
               >
                 {state.employees.length === 0
                   ? <option value={0}>Sin empleados activos</option>
                   : state.employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.fullName}</option>)}
               </select>
+              {isEditing ? <p className="text-[11px] text-muted-foreground mt-1">No se puede cambiar el empleado al editar</p> : null}
             </div>
             <div className="field">
               <label htmlFor="payroll-payment-date" className="field-label">Fecha de pago</label>
@@ -263,11 +309,11 @@ export function PayrollCreatePage({ token }: Props) {
             </div>
             <div className="field">
               <label htmlFor="payroll-year" className="field-label">Año</label>
-              <input id="payroll-year" className="input" type="number" value={state.form.year} onChange={(e) => setField('year', Number(e.target.value))} required />
+              <input id="payroll-year" className={`input${isEditing ? ' bg-muted/40' : ''}`} type="number" value={state.form.year} readOnly={isEditing} onChange={(e) => setField('year', Number(e.target.value))} required />
             </div>
             <div className="field">
               <label htmlFor="payroll-month" className="field-label">Mes</label>
-              <input id="payroll-month" className="input" type="number" min={1} max={12} value={state.form.month} onChange={(e) => setField('month', Number(e.target.value))} required />
+              <input id="payroll-month" className={`input${isEditing ? ' bg-muted/40' : ''}`} type="number" min={1} max={12} value={state.form.month} readOnly={isEditing} onChange={(e) => setField('month', Number(e.target.value))} required />
             </div>
             <div className="field">
               <label htmlFor="payroll-days" className="field-label">Días trabajados</label>
@@ -406,7 +452,7 @@ export function PayrollCreatePage({ token }: Props) {
         {state.error ? <p className="text-sm text-red-600">{state.error}</p> : null}
 
         <button type="submit" className="btn-primary" disabled={state.saving}>
-          <Calculator size={14} /> {state.saving ? 'Guardando...' : 'Crear nómina'}
+          <Calculator size={14} /> {state.saving ? 'Guardando...' : isEditing ? 'Guardar cambios' : 'Crear nómina'}
         </button>
       </form>
     </div>

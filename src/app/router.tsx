@@ -94,6 +94,7 @@ export function AppRouter() {
         <Route path="employees/create" element={<EmployeeCreatePage token={state.token ?? ''} />} />
         <Route path="payroll" element={<PayrollPage token={state.token ?? ''} />} />
         <Route path="payroll/create" element={<PayrollCreatePage token={state.token ?? ''} />} />
+        <Route path="payroll/:id/edit" element={<PayrollCreatePage token={state.token ?? ''} />} />
 
         <Route path="loans" element={<LoansOverviewPage token={state.token ?? ''} />} />
         <Route path="loans/create" element={<LoanCreatePage token={state.token ?? ''} />} />

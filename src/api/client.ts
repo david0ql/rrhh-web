@@ -286,6 +286,29 @@ export const api = {
       request<PayrollConfig>('/payroll/config', { method: 'GET' }, token),
     list: (token: string, query?: ListQuery) =>
       request<PaginatedResponse<PayrollRecord>>(withQuery('/payroll', query), { method: 'GET' }, token),
+    get: (token: string, id: number) =>
+      request<PayrollRecord>(`/payroll/${id}`, { method: 'GET' }, token),
+    update: (
+      token: string,
+      id: number,
+      payload: {
+        paymentDate?: string;
+        daysWorked: number;
+        earnedSalary: number;
+        earnedExtras: number;
+        deductionLoan: number;
+        deductionOther: number;
+        notes?: string;
+      },
+    ) =>
+      request<PayrollRecord>(
+        `/payroll/${id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        },
+        token,
+      ),
     create: (
       token: string,
       payload: {

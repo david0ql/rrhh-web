@@ -1,4 +1,4 @@
-import { FileDown, Mail, Plus } from 'lucide-react';
+import { FileDown, Mail, Pencil, Plus } from 'lucide-react';
 import { useEffect, useReducer } from 'react';
 import { Link } from 'react-router-dom';
 import { api, fmt } from '../api/client';
@@ -309,6 +309,13 @@ export function PayrollPage({ token }: Props) {
                   <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmt.currency(r.netPay)}</td>
                   <td className="px-3 py-3 text-center">
                     <div className="flex items-center justify-center gap-1">
+                      <Link
+                        to={`/payroll/${r.id}/edit`}
+                        className="btn-ghost px-2"
+                        title="Editar nómina"
+                      >
+                        <Pencil size={14} />
+                      </Link>
                       <button
                         className="btn-ghost px-2"
                         title="Reimpulsar nómina por correo"
