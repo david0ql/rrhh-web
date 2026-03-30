@@ -239,7 +239,11 @@ export function PayrollCreatePage({ token }: Props) {
       const { loanId, paymentDate, ...rest } = state.form;
       if (isEditing && editId) {
         await api.payroll.update(token, Number(editId), {
-          ...rest,
+          daysWorked: rest.daysWorked,
+          earnedSalary: rest.earnedSalary,
+          earnedExtras: rest.earnedExtras,
+          deductionLoan: rest.deductionLoan,
+          deductionOther: rest.deductionOther,
           ...(paymentDate ? { paymentDate } : {}),
         });
       } else {
