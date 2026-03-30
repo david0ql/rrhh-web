@@ -1,4 +1,4 @@
-import { FileDown, Plus } from 'lucide-react';
+import { FileDown, Mail, Plus } from 'lucide-react';
 import { useEffect, useReducer } from 'react';
 import { Link } from 'react-router-dom';
 import { api, fmt } from '../api/client';
@@ -12,33 +12,49 @@ type PayrollState = {
   records: PayrollRecord[];
   selectedIds: number[];
   error: string;
+  success: string;
   page: number;
   order: PaginationOrder;
   orderBy: PayrollOrderBy;
   totalPages: number;
   totalItems: number;
+  emailModal: {
+    payrollId: number;
+    employeeName: string;
+    email: string;
+    sending: boolean;
+    error: string;
+  } | null;
 };
 
 type PayrollAction =
   | { type: 'dataLoaded'; records: PayrollRecord[]; totalPages: number; totalItems: number }
   | { type: 'loadFailed'; error: string }
+  | { type: 'setSuccess'; success: string }
   | { type: 'setPage'; page: number }
   | { type: 'setOrder'; order: PaginationOrder }
   | { type: 'setOrderBy'; orderBy: PayrollOrderBy }
   | { type: 'toggleSelected'; id: number }
   | { type: 'toggleSelectPage' }
   | { type: 'clearSelection' }
-  | { type: 'clearError' };
+  | { type: 'clearError' }
+  | { type: 'openEmailModal'; payrollId: number; employeeName: string; email: string }
+  | { type: 'closeEmailModal' }
+  | { type: 'setEmailValue'; email: string }
+  | { type: 'emailSendStarted' }
+  | { type: 'emailSendFailed'; error: string };
 
 const initialState: PayrollState = {
   records: [],
   selectedIds: [],
   error: '',
+  success: '',
   page: 1,
   order: 'DESC',
   orderBy: 'id',
   totalPages: 1,
   totalItems: 0,
+  emailModal: null,
 };
 
 function reducer(state: PayrollState, action: PayrollAction): PayrollState {
@@ -56,7 +72,9 @@ function reducer(state: PayrollState, action: PayrollAction): PayrollState {
       };
     }
     case 'loadFailed':
-      return { ...state, error: action.error };
+      return { ...state, error: action.error, success: '' };
+    case 'setSuccess':
+      return { ...state, success: action.success, error: '' };
     case 'setPage':
       return { ...state, page: action.page };
     case 'setOrder':
@@ -79,6 +97,54 @@ function reducer(state: PayrollState, action: PayrollAction): PayrollState {
       return { ...state, selectedIds: [] };
     case 'clearError':
       return { ...state, error: '' };
+    case 'openEmailModal':
+      return {
+        ...state,
+        emailModal: {
+          payrollId: action.payrollId,
+          employeeName: action.employeeName,
+          email: action.email,
+          sending: false,
+          error: '',
+        },
+      };
+    case 'closeEmailModal':
+      return { ...state, emailModal: null };
+    case 'setEmailValue':
+      return state.emailModal
+        ? {
+            ...state,
+            emailModal: {
+              ...state.emailModal,
+              email: action.email,
+              error: '',
+            },
+          }
+        : state;
+    case 'emailSendStarted':
+      return state.emailModal
+        ? {
+            ...state,
+            error: '',
+            success: '',
+            emailModal: {
+              ...state.emailModal,
+              sending: true,
+              error: '',
+            },
+          }
+        : state;
+    case 'emailSendFailed':
+      return state.emailModal
+        ? {
+            ...state,
+            emailModal: {
+              ...state.emailModal,
+              sending: false,
+              error: action.error,
+            },
+          }
+        : { ...state, error: action.error };
     default:
       return state;
   }
@@ -132,6 +198,27 @@ export function PayrollPage({ token }: Props) {
     }
   }
 
+  async function sendPayrollEmail() {
+    if (!state.emailModal) return;
+
+    const destination = state.emailModal.email.trim();
+    if (!destination) {
+      dispatch({ type: 'emailSendFailed', error: 'Escribe un correo destino' });
+      return;
+    }
+
+    dispatch({ type: 'emailSendStarted' });
+    try {
+      await api.payroll.sendEmail(token, state.emailModal.payrollId, {
+        email: destination,
+      });
+      dispatch({ type: 'closeEmailModal' });
+      dispatch({ type: 'setSuccess', success: `Nómina enviada a ${destination}` });
+    } catch (err) {
+      dispatch({ type: 'emailSendFailed', error: err instanceof Error ? err.message : 'Error enviando correo' });
+    }
+  }
+
   const pageIds = state.records.map((r) => Number(r.id));
   const allPageSelected = pageIds.length > 0 && pageIds.every((id) => state.selectedIds.includes(id));
 
@@ -158,6 +245,7 @@ export function PayrollPage({ token }: Props) {
       </header>
 
       {state.error ? <p className="text-sm text-red-600 shrink-0">{state.error}</p> : null}
+      {state.success ? <p className="text-sm text-emerald-700 shrink-0">{state.success}</p> : null}
 
       <div className="card-soft flex flex-col flex-1 min-h-0">
         <div className="flex items-center justify-end px-4 py-2.5 border-b shrink-0 gap-2">
@@ -220,13 +308,27 @@ export function PayrollPage({ token }: Props) {
                   <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{fmt.currency(r.totalDeductions)}</td>
                   <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmt.currency(r.netPay)}</td>
                   <td className="px-3 py-3 text-center">
-                    <button
-                      className="btn-ghost px-2"
-                      title="Descargar comprobante PDF"
-                      onClick={() => void downloadPdf(Number(r.id))}
-                    >
-                      <FileDown size={14} />
-                    </button>
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        className="btn-ghost px-2"
+                        title="Reimpulsar nómina por correo"
+                        onClick={() => dispatch({
+                          type: 'openEmailModal',
+                          payrollId: Number(r.id),
+                          employeeName: r.employeeName ?? `#${r.employeeId}`,
+                          email: r.employeeEmail ?? '',
+                        })}
+                      >
+                        <Mail size={14} />
+                      </button>
+                      <button
+                        className="btn-ghost px-2"
+                        title="Descargar comprobante PDF"
+                        onClick={() => void downloadPdf(Number(r.id))}
+                      >
+                        <FileDown size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -242,6 +344,54 @@ export function PayrollPage({ token }: Props) {
           </div>
         </div>
       </div>
+
+      {state.emailModal ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/35 p-4">
+          <div className="card-soft w-full max-w-md p-5 space-y-4 shadow-xl">
+            <div>
+              <h2 className="text-base font-semibold">Reimpulsar nómina</h2>
+              <p className="text-sm text-muted-foreground">
+                Enviar comprobante de {state.emailModal.employeeName}.
+              </p>
+            </div>
+
+            <div className="field">
+              <label htmlFor="payroll-email" className="field-label">Correo destino</label>
+              <input
+                id="payroll-email"
+                className="input"
+                type="email"
+                value={state.emailModal.email}
+                onChange={(e) => dispatch({ type: 'setEmailValue', email: e.target.value })}
+                placeholder="correo@empresa.com"
+              />
+            </div>
+
+            {state.emailModal.error ? (
+              <p className="text-sm text-red-600">{state.emailModal.error}</p>
+            ) : null}
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={state.emailModal.sending}
+                onClick={() => dispatch({ type: 'closeEmailModal' })}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={state.emailModal.sending}
+                onClick={() => void sendPayrollEmail()}
+              >
+                <Mail size={14} /> {state.emailModal.sending ? 'Enviando...' : 'Enviar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

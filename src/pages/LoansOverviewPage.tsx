@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react';
+import { Pencil, Plus } from 'lucide-react';
 import { useEffect, useReducer } from 'react';
 import { Link } from 'react-router-dom';
 import { api, fmt } from '../api/client';
@@ -121,12 +121,13 @@ export function LoansOverviewPage({ token }: Props) {
                 <th className="text-right px-4 py-3">Pagado</th>
                 <th className="text-right px-4 py-3">Saldo</th>
                 <th className="text-center px-4 py-3">Estado</th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y">
               {state.loans.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-20 text-center text-sm text-muted-foreground">
+                  <td colSpan={7} className="py-20 text-center text-sm text-muted-foreground">
                     Sin préstamos registrados
                   </td>
                 </tr>
@@ -139,6 +140,11 @@ export function LoansOverviewPage({ token }: Props) {
                   <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmt.currency(loan.balance)}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={STATUS_BADGE[loan.status]}>{loan.status}</span>
+                  </td>
+                  <td className="px-3 py-3 text-center">
+                    <Link to={`/loans/${loan.id}/edit`} className="btn-ghost px-2" title="Editar préstamo">
+                      <Pencil size={14} />
+                    </Link>
                   </td>
                 </tr>
               ))}

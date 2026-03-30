@@ -97,6 +97,7 @@ export function AppRouter() {
 
         <Route path="loans" element={<LoansOverviewPage token={state.token ?? ''} />} />
         <Route path="loans/create" element={<LoanCreatePage token={state.token ?? ''} />} />
+        <Route path="loans/:id/edit" element={<LoanCreatePage token={state.token ?? ''} />} />
         <Route path="loans/payments" element={<LoanPaymentsPage token={state.token ?? ''} />} />
 
         <Route path="settings" element={<SettingsPage token={state.token ?? ''} />} />

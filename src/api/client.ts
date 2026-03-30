@@ -90,6 +90,7 @@ export type PayrollRecord = {
   id: number;
   employeeId: number;
   employeeName?: string | null;
+  employeeEmail?: string | null;
   year: number;
   month: number;
   paymentDate?: string;
@@ -302,6 +303,22 @@ export const api = {
         },
         token,
       ),
+    sendEmail: (
+      token: string,
+      id: number,
+      payload?: {
+        email?: string;
+        cc?: string;
+      },
+    ) =>
+      request<{ success: boolean; destination: string | null }>(
+        `/payroll/${id}/send-email`,
+        {
+          method: 'POST',
+          body: JSON.stringify(payload ?? {}),
+        },
+        token,
+      ),
     pdf: (token: string, id: number) => requestBlob(`/payroll/${id}/pdf`, token),
     pdfZip: (token: string, payrollIds: number[]) =>
       requestBlob('/payroll/pdf/zip', token, {
@@ -313,6 +330,8 @@ export const api = {
   loans: {
     list: (token: string, query?: LoansListQuery) =>
       request<PaginatedResponse<Loan>>(withQuery('/loans', query), { method: 'GET' }, token),
+    get: (token: string, id: number) =>
+      request<Loan>(`/loans/${id}`, { method: 'GET' }, token),
     listPayments: (token: string, query?: ListQuery) =>
       request<PaginatedResponse<LoanPayment>>(withQuery('/loans/payments', query), { method: 'GET' }, token),
     create: (
@@ -329,6 +348,25 @@ export const api = {
         '/loans',
         {
           method: 'POST',
+          body: JSON.stringify(payload),
+        },
+        token,
+      ),
+    update: (
+      token: string,
+      id: number,
+      payload: {
+        employeeId?: number;
+        startDate?: string;
+        principalAmount?: number;
+        suggestedInstallmentAmount?: number;
+        notes?: string;
+      },
+    ) =>
+      request<Loan>(
+        `/loans/${id}`,
+        {
+          method: 'PATCH',
           body: JSON.stringify(payload),
         },
         token,
