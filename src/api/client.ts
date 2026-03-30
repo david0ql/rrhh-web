@@ -111,6 +111,13 @@ export type PayrollRecord = {
   notes?: string;
 };
 
+export type PayrollConfig = {
+  minimumWageMonthly: number;
+  transportAllowanceMonthly: number;
+  transportAllowanceDaily: number;
+  transportAllowanceSalaryLimit: number;
+};
+
 export type Loan = {
   id: number;
   employeeId: number;
@@ -275,6 +282,8 @@ export const api = {
   },
 
   payroll: {
+    config: (token: string) =>
+      request<PayrollConfig>('/payroll/config', { method: 'GET' }, token),
     list: (token: string, query?: ListQuery) =>
       request<PaginatedResponse<PayrollRecord>>(withQuery('/payroll', query), { method: 'GET' }, token),
     create: (

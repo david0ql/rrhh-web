@@ -3,7 +3,7 @@ import { useEffect, useReducer } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, fmt } from '../api/client';
-import type { Employee, Loan } from '../api/client';
+import type { Employee, Loan, PayrollConfig } from '../api/client';
 
 type Props = { token: string };
 const HEALTH_EMPLOYEE_RATE = 4;
@@ -27,6 +27,7 @@ type PayrollForm = {
 type State = {
   employees: Employee[];
   activeLoan: Loan | null;
+  payrollConfig: PayrollConfig | null;
   error: string;
   saving: boolean;
   form: PayrollForm;
@@ -37,6 +38,8 @@ type State = {
 type Action =
   | { type: 'employeesLoaded'; employees: Employee[] }
   | { type: 'employeesLoadFailed'; error: string }
+  | { type: 'configLoaded'; config: PayrollConfig }
+  | { type: 'configLoadFailed'; error: string }
   | { type: 'employeeSelected'; employeeId: number }
   | { type: 'loanLoaded'; loan: Loan | null; loanId: number | undefined }
   | { type: 'loanLoadFailed' }
@@ -76,6 +79,7 @@ function recalcMandatoryDeductions(form: PayrollForm): PayrollForm {
 const initialState: State = {
   employees: [],
   activeLoan: null,
+  payrollConfig: null,
   error: '',
   saving: false,
   form: initialForm,
@@ -98,6 +102,10 @@ function reducer(state: State, action: Action): State {
     }
     case 'employeesLoadFailed':
       return { ...state, error: action.error, loadingEmployees: false };
+    case 'configLoaded':
+      return { ...state, payrollConfig: action.config };
+    case 'configLoadFailed':
+      return { ...state, error: action.error };
     case 'employeeSelected': {
       const emp = state.employees.find((e) => Number(e.id) === action.employeeId);
       return {
@@ -158,6 +166,13 @@ export function PayrollCreatePage({ token }: Props) {
   }, [token]);
 
   useEffect(() => {
+    api.payroll
+      .config(token)
+      .then((config) => dispatch({ type: 'configLoaded', config }))
+      .catch((err) => dispatch({ type: 'configLoadFailed', error: err instanceof Error ? err.message : 'Error cargando configuración de nómina' }));
+  }, [token]);
+
+  useEffect(() => {
     if (!state.form.employeeId) {
       dispatch({ type: 'loanLoaded', loan: null, loanId: undefined });
       return;
@@ -196,7 +211,13 @@ export function PayrollCreatePage({ token }: Props) {
     }
   }
 
-  const totalEarnings = state.form.earnedSalary + state.form.earnedExtras;
+  const workedDaysForAllowance = Math.max(0, Math.min(30, Number(state.form.daysWorked)));
+  const transportAllowancePreview = state.payrollConfig
+    ? Number(state.form.earnedSalary) <= state.payrollConfig.transportAllowanceSalaryLimit
+      ? Math.round(state.payrollConfig.transportAllowanceDaily * workedDaysForAllowance * 100) / 100
+      : 0
+    : 0;
+  const totalEarnings = state.form.earnedSalary + state.form.earnedExtras + transportAllowancePreview;
   const totalDeductions = state.form.deductionHealth + state.form.deductionPension + state.form.deductionLoan + state.form.deductionOther;
   const netPay = totalEarnings - totalDeductions;
   const loanProgressPct = state.activeLoan
@@ -266,6 +287,37 @@ export function PayrollCreatePage({ token }: Props) {
               <label htmlFor="payroll-extras" className="field-label">Extras / bonificaciones</label>
               <input id="payroll-extras" className="input" type="number" min={0} value={state.form.earnedExtras} onChange={(e) => setField('earnedExtras', Number(e.target.value))} required />
             </div>
+          </div>
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 space-y-2">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <div>
+                <p className="font-semibold text-emerald-900">Auxilio de transporte estimado</p>
+                <p className="text-xs text-emerald-700">
+                  {state.payrollConfig
+                    ? `Se liquida con ${workedDaysForAllowance} día(s) sobre ${fmt.currency(state.payrollConfig.transportAllowanceMonthly)} al mes.`
+                    : 'Cargando parámetros de nómina...'}
+                </p>
+              </div>
+              <p className="text-base font-bold tabular-nums text-emerald-900">
+                {fmt.currency(transportAllowancePreview)}
+              </p>
+            </div>
+            {state.payrollConfig ? (
+              Number(state.form.earnedSalary) <= state.payrollConfig.transportAllowanceSalaryLimit ? (
+                <p className="text-xs text-emerald-700">
+                  Aplica porque el salario devengado no supera {fmt.currency(state.payrollConfig.transportAllowanceSalaryLimit)}.
+                </p>
+              ) : (
+                <p className="text-xs text-amber-700">
+                  No aplica porque el salario devengado supera {fmt.currency(state.payrollConfig.transportAllowanceSalaryLimit)}.
+                </p>
+              )
+            ) : null}
+            {Number(state.form.daysWorked) > 30 ? (
+              <p className="text-xs text-amber-700">
+                Para el cálculo del auxilio se toman máximo 30 días.
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -337,6 +389,9 @@ export function PayrollCreatePage({ token }: Props) {
           <div>
             <p className="text-xs text-muted-foreground mb-1">Total devengado</p>
             <p className="font-semibold tabular-nums">{fmt.currency(totalEarnings)}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Incluye auxilio estimado de {fmt.currency(transportAllowancePreview)}
+            </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground mb-1">Total deducciones</p>
